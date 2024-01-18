@@ -1,0 +1,431 @@
+<html>
+  <head>
+    <title>Formes</title>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="https://d3js.org/d3.v4.js"></script>
+    <script type="text/javascript" src="./fisheye.js"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap");
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-family: "Poppins", sans-serif;
+        font-size: 1rem;
+        font-weight: 400;
+        margin: 0;
+        min-height: 100vh;
+        flex-direction: column;
+      }
+      .links line {
+        stroke: #999;
+        stroke-opacity: 0.6;
+      }
+
+      .nodes circle {
+        stroke: #fff;
+        stroke-width: 1.5px;
+      }
+
+      text {
+        font-family: sans-serif;
+        font-size: 10px;
+      }
+
+      /* magnifier glass as circle */
+      .lens {
+        stroke: gray;
+        stroke-width: 2px;
+        stroke-opacity: 0;
+        fill: none;
+      }
+
+      .container {
+        display: flex;
+        justify-content: space-between;
+        background-color: #b8c6db;
+        background-image: linear-gradient(315deg, #b8c6db 0%, #f5f7fa 100%);
+        background-color: #fff;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(100, 100, 100, 0.1);
+        padding: 10 5;
+        width: 600;
+      }
+
+      .choice {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .left {
+        padding-right: 17;
+        
+        border-right:dashed white ;
+      }
+
+      .right {
+        padding-left: 17;
+      }
+
+      i {
+        opacity: 80%;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>World Soccer Paris 1998 Players' exports</h2>
+    <svg id="viz" width="960" height="550"></svg>
+    <div class="container">
+      <div class="choice left" width="50%">
+        <div>
+          <legend>Select the interactions to apply</legend>
+          <div class="choice-in">
+            <input
+              id="fisheye"
+              type="checkbox"
+              checked="on"
+              onclick="calcFish()"
+            />Fisheye<br />
+          </div>
+          <div class="choice-in">
+            <input id="force-diagram" type="checkbox" onclick="calc()" />Force
+            diagram
+          </div>
+        </div>
+      </div>
+      <div class="choice right" width="50%">
+        <div>
+          <div class="choice-in">
+           <i> Nodes :</i>  countries
+          </div>
+          <div class="choice-in">
+            <i>Links :</i> exports between countries
+          </div>
+          <div class="choice-in">
+            <i>Colors :</i> exports - imports rate
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      var svg = d3.select("svg"),
+        width = +svg.attr("width"),
+        height = +svg.attr("height");
+
+      var link;
+      var text;
+      var circles;
+      var fisheye;
+      var color = d3.scaleOrdinal(d3.schemeCategory20);
+
+      var width = 960;
+      var height = 550;
+      var data;
+
+      var test = function () {
+        d3.csv("./Dataset/Datset_football.txt", function (data) {
+          data = JSON.stringify(data);
+          data = JSON.parse(data);
+
+          // transforming the data  to JSON
+
+          var nodes = data.slice(0, 35).map(function (d) {
+            return {
+              id: d["*Vertices     35"].split(/\s+/)[1],
+              group: 0,
+              name: d["*Vertices     35"].split(/\s+/)[2].slice(1, 4),
+              x: scale(d["*Vertices     35"].split(/\s+/)[3], 0, 1, 0, width),
+              y: scale(d["*Vertices     35"].split(/\s+/)[4], 0, 1, 0, height),
+              r: 6,
+            };
+          });
+
+          var links = data.slice(36, 153).map(function (d) {
+            return {
+              source: d["*Vertices     35"].split(/\s+/)[1],
+              target: d["*Vertices     35"].split(/\s+/)[2],
+              value: d["*Vertices     35"].split(/\s+/)[3],
+            };
+          });
+
+          nodes.forEach((element) => {
+            element.group = 0;
+            var res = links.filter((x) => x.source === element.id);
+            if (res.length) {
+              nexports = res
+                .map((item) => item.value)
+                .reduce((prev, next) => parseFloat(prev) + parseFloat(next));
+            }
+
+            var res = links.filter((x) => x.target === element.id);
+            if (res.length) {
+              nimports = res
+                .map((item) => item.value)
+                .reduce((prev, next) => parseFloat(prev) + parseFloat(next));
+            }
+            element.group = nexports - nimports;
+          });
+
+          data = { nodes, links };
+          //function to scale the coordinates
+          function scale(number, inMin, inMax, outMin, outMax) {
+            return (
+              ((number - inMin) * (outMax - outMin)) / (inMax - inMin) + outMin
+            );
+          }
+
+          /////////////////////////////////////// creating the network /////////////////
+
+          link = svg
+            .append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(data.links)
+            .enter()
+            .append("line")
+            .attr("x1", function (d) {
+              return data.nodes[d.source - 1].x;
+            })
+            .attr("y1", function (d) {
+              return data.nodes[d.source - 1].y;
+            })
+            .attr("x2", function (d) {
+              return data.nodes[d.target - 1].x;
+            })
+            .attr("y2", function (d) {
+              return data.nodes[d.target - 1].y;
+            })
+            .attr("stroke-width", function (d) {
+              return Math.sqrt(d.value);
+            });
+
+          node = svg
+            .append("g")
+            .attr("class", "nodes")
+            .selectAll("g")
+            .data(data.nodes)
+            .enter()
+            .append("g");
+
+          circles = node
+            .append("circle")
+            .attr("r", function (d) {
+              return d.r;
+            })
+            .attr("cx", function (d) {
+              return d.x;
+            })
+            .attr("cy", function (d) {
+              return d.y;
+            })
+            .attr("fill", function (d) {
+              return color(d.group);
+            });
+
+          text = node
+            .append("text")
+            .attr("class", "text")
+            .attr("dy", function (d) {
+              return d.y;
+            })
+            .attr("dx", function (d) {
+              return d.x + 10;
+            })
+            .text(function (d) {
+              return d.name;
+            });
+
+          node.append("title").text(function (d) {
+            return d.id;
+          });
+
+          /////////////////////////////// fisheye ///////////////////////
+          // déclaration de fonction :
+
+          fisheye = d3.fisheye.circular().radius(100).distortion(5);
+
+          // magnifier as circle
+          var lens = svg
+            .append("circle")
+            .attr("class", "lens")
+            .attr("r", fisheye.radius());
+
+          // Ajout à l’svg
+
+          svg.on("mousemove", function () {
+            fisheye.focus(d3.mouse(this));
+
+            var mouseX = d3.mouse(this)[0];
+            var mouseY = d3.mouse(this)[1];
+            var r = fisheye.radius();
+
+            // display magnifier as circle
+            // lens
+            // .attr("cx", mouseX)
+            //.style("stroke-opacity", 10)
+            // .attr("cy", mouseY);
+
+            node.each(function (d) {
+              d.fisheye = fisheye(d);
+            });
+
+            circles
+              .attr("cx", function (d) {
+                return d.fisheye.x;
+              })
+              .attr("cy", function (d) {
+                return d.fisheye.y;
+              })
+              .attr("r", function (d) {
+                return d.fisheye.z * 4;
+              });
+
+            text
+              .attr("dx", function (d) {
+                return d.fisheye.x + 15;
+              })
+              .attr("dy", function (d) {
+                return d.fisheye.y;
+              });
+
+            link
+              .attr("x1", function (d) {
+                return d.source.fisheye.x;
+              })
+              .attr("y1", function (d) {
+                return d.source.fisheye.y;
+              })
+              .attr("x2", function (d) {
+                return d.target.fisheye.x;
+              })
+              .attr("y2", function (d) {
+                return d.target.fisheye.y;
+              });
+          });
+
+          ///////////////////////////// algorithme de force /////////////////
+
+          /// a. Initialiser la force
+
+          simulation = d3
+            .forceSimulation()
+            .force(
+              "link",
+              d3.forceLink().id(function (d) {
+                return d.id;
+              })
+            )
+            .force("charge", d3.forceManyBody().strength(-400))
+            .force("center", d3.forceCenter(width / 2, height / 2 - 50));
+
+          simulation.nodes(data.nodes).on("tick", ticked);
+
+          simulation.force("link").links(data.links);
+
+          function ticked() {
+            link
+              .attr("x1", function (d) {
+                return d.source.x;
+              })
+              .attr("y1", function (d) {
+                return d.source.y;
+              })
+              .attr("x2", function (d) {
+                return d.target.x;
+              })
+              .attr("y2", function (d) {
+                return d.target.y;
+              });
+
+            circles
+              .attr("cx", function (d) {
+                return d.x;
+              })
+              .attr("cy", function (d) {
+                return d.y;
+              });
+
+            text
+              .attr("dx", function (d) {
+                return d.x + 10;
+              })
+              .attr("dy", function (d) {
+                return d.y;
+              });
+          }
+
+          // Create a drag handler and append it to the node object instead
+          force_on();
+        });
+      };
+
+      test();
+      var drag_handler = d3
+        .drag()
+        .on("start", dragstarted)
+        .on("drag", dragged)
+        .on("end", dragended);
+
+      function dragstarted(d) {
+        if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+
+      function dragged(d) {
+        d.fx = d3.event.x;
+        d.fy = d3.event.y;
+      }
+
+      function dragended(d) {
+        if (!d3.event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+      var node;
+      var simulation;
+      function force_on() {
+        if (isforce === true) {
+          drag_handler(node);
+        } else {
+          node.on(".drag", null);
+        }
+      }
+
+      function fish_on() {}
+
+      var isfisheye = false;
+      var isforce = false;
+
+      function calc() {
+        console.log(isforce);
+        if (document.getElementById("force-diagram").checked) {
+          isforce = true;
+        } else {
+          isforce = false;
+        }
+        force_on();
+      }
+
+      function calcFish() {
+        console.log(isfisheye);
+        if (document.getElementById("fisheye").checked) {
+          isfisheye = true;
+          svg.selectAll("line").remove();
+          node.selectAll("circle").remove();
+          node.selectAll(".text").remove();
+          test();
+        } else {
+          isfisheye = false;
+          svg.on("mousemove", null);
+        }
+        console.log(isfisheye);
+        fish_on();
+      }
+    </script>
+  </body>
+</html>
